@@ -305,7 +305,23 @@ void pair_polar(                                                              //
       }
 
       // get the dtau/dr terms used for mutual polarization force
-			// recalculate scaling for aplus mutual
+			if (ddi*ddk > 0) {
+      		damp_thole3g(          //
+      		   r, rr2, xr, yr, zr, //
+      		   pdi, pti, pdk, ptk, //
+      		   ex3, ex5, ex7,      //
+      		   rc31, rc32, rc33,   //
+      		   rc51, rc52, rc53,   //
+      		   rc71, rc72, rc73);
+      		rc31 *= rr3;
+      		rc32 *= rr3;
+      		rc33 *= rr3;
+      		rc51 *= rr5;
+      		rc52 *= rr5;
+      		rc53 *= rr5;
+   				sr3 = bn[1] - ex3 * rr3;
+   				sr5 = bn[2] - ex5 * rr5;
+			}
       term1 = bn[2] - ex3 * rr5;
       term2 = bn[3] - ex5 * rr7;
       term3 = sr5 + term1;
@@ -648,7 +664,23 @@ void pair_polar_v2(                                                           //
       }
 
       // get the dtau/dr terms used for mutual polarization force
-			// recalculate here
+			if (ddi*ddk > 0) {
+      		damp_thole3g(          //
+      		   r, rr2, xr, yr, zr, //
+      		   pdi, pti, pdk, ptk, //
+      		   ex3, ex5, ex7,      //
+      		   rc31, rc32, rc33,   //
+      		   rc51, rc52, rc53,   //
+      		   rc71, rc72, rc73);
+      		rc31 *= rr3;
+      		rc32 *= rr3;
+      		rc33 *= rr3;
+      		rc51 *= rr5;
+      		rc52 *= rr5;
+      		rc53 *= rr5;
+   				sr3 = bn[1] - ex3 * rr3;
+   				sr5 = bn[2] - ex5 * rr5;
+			}
       term1 = bn[2] - ex3 * rr5;
       term2 = bn[3] - ex5 * rr7;
       term3 = sr5 + term1;
