@@ -61,6 +61,7 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
       real uiz = uind[i][2];
       real pdi = pdamp[i];
       real pti = thole[i];
+      real ddi = dirdamp[i];
       real uixp = 0, uiyp = 0, uizp = 0;
       if CONSTEXPR (do_g) {
          uixp = uinp[i][0];
@@ -108,9 +109,9 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
             pair_polar<do_e, do_g, EWALD>( //
                r2, xr, yr, zr, 1, 1, 1,    //
                ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
-               uiz, uixp, uiyp, uizp, pdi, pti, //
+               uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
                ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
-               ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], //
+               ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
                f, aewald, e, pgrad);
 
             if CONSTEXPR (do_a)
@@ -209,6 +210,7 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
       real uiz = uind[i][2];
       real pdi = pdamp[i];
       real pti = thole[i];
+      real ddi = dirdamp[i];
       real uixp = 0, uiyp = 0, uizp = 0;
       if CONSTEXPR (do_g) {
          uixp = uinp[i][0];
@@ -246,9 +248,9 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
          pair_polar<do_e, do_g, NON_EWALD>(         //
             r2, xr, yr, zr, dscale, pscale, uscale, //
             ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
-            uiz, uixp, uiyp, uizp, pdi, pti, //
+            uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
             ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
-            ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], //
+            ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
             f, 0, e, pgrad);
 
          if CONSTEXPR (do_a)

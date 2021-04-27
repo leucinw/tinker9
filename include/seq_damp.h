@@ -46,7 +46,7 @@ inline void damp_aplus3(real r, real pdi, real ddi, real pdk, real ddk,
    real ratio = r * REAL_RECIP(damp);
    damp = (damp == 0 ? 0 : pgamma * REAL_SQRT(ratio * ratio * ratio));
 	 real damp2 = damp * damp;
-   real expdamp = REAL_EXP(damp);
+   real expdamp = REAL_EXP(-damp);
    scale3 = 1 - expdamp;
    scale5 = 1 - expdamp * (1 + (real)0.5 * damp);
    scale7 = 1 - expdamp * (1 + (real)0.65 * damp + (real)0.15 * damp2);
@@ -85,6 +85,37 @@ inline void damp_thole3g(real r, real rr2, real xr, real yr, real zr, real pdi,
    rc73 = rc53 * temp7;
 }
 
+SEQ_ROUTINE
+inline void damp_aplus3g(real r, real rr2, real xr, real yr, real zr, real pdi,
+                         real ddi, real pdk, real ddk, real& restrict scale31,
+                         real& restrict scale51, real& restrict scale71,
+                         real& restrict rc31, real& restrict rc32,
+                         real& restrict rc33, real& restrict rc51,
+                         real& restrict rc52, real& restrict rc53,
+                         real& restrict rc71, real& restrict rc72,
+                         real& restrict rc73)
+{
+   real pgamma = REAL_MIN(ddi, ddk);
+   real damp = pdi * pdk;
+   real ratio = r * REAL_RECIP(damp);
+   damp = (damp == 0 ? 0 : pgamma * REAL_SQRT(ratio * ratio * ratio));
+	 real damp2 = damp * damp;
+   scale31 = REAL_EXP(-damp);
+   scale51 = scale31 * (1 + (real)0.5 * damp);
+   scale71 = scale31 * (1 + (real)0.65 * damp + (real)0.15 * damp2);
+   real temp3 = (real)1.5 * damp * scale31 * rr2;
+   real temp5 = (real)0.5 * (1 + damp);
+   real temp7 = (real)0.7 + (real)0.5*damp2 / temp5;
+   rc31 = xr * temp3;
+   rc32 = yr * temp3;
+   rc33 = zr * temp3;
+   rc51 = rc31 * temp5;
+   rc52 = rc32 * temp5;
+   rc53 = rc33 * temp5;
+   rc71 = rc51 * temp7;
+   rc72 = rc52 * temp7;
+   rc73 = rc53 * temp7;
+}
 
 SEQ_ROUTINE
 inline void damp_thole4(real r, real pdi, real pti, real pdk, real ptk,
