@@ -25,8 +25,8 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
                 const int* restrict iakpl, int niak, const int* restrict iak,
                 const int* restrict lst, real (*restrict field)[3],
                 real (*restrict fieldp)[3], const real (*restrict rpole)[10],
-                const real* restrict thole, const real* restrict pdamp,
-                real aewald)
+                const real* restrict thole, const real* restrict dirdamp, 
+								const real* restrict pdamp, real aewald)
 {
    const int ithread = threadIdx.x + blockIdx.x * blockDim.x;
    const int iwarp = ithread / WARP_SIZE;
@@ -64,6 +64,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
    __shared__ real qizz[BLOCK_DIM];
    __shared__ real pdi[BLOCK_DIM];
    __shared__ real pti[BLOCK_DIM];
+   __shared__ real ddi[BLOCK_DIM];
    real ck;
    real dkx;
    real dky;
@@ -76,6 +77,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
    real qkzz;
    real pdk;
    real ptk;
+   real ddk;
 
 
    //* /
@@ -119,6 +121,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qizz[klane] = rpole[i][mpl_pme_zz];
       pdi[klane] = pdamp[i];
       pti[klane] = thole[i];
+      ddi[klane] = dirdamp[i];
       ck = rpole[k][mpl_pme_0];
       dkx = rpole[k][mpl_pme_x];
       dky = rpole[k][mpl_pme_y];
@@ -131,6 +134,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qkzz = rpole[k][mpl_pme_zz];
       pdk = pdamp[k];
       ptk = thole[k];
+      ddk = dirdamp[k];
 
 
       constexpr bool incl = true;
@@ -142,8 +146,8 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
          pair_dfield_v2<ETYP>(
             r2, xr, yr, zr, scalea, scaleb, aewald, ci[klane], dix[klane],
             diy[klane], diz[klane], qixx[klane], qixy[klane], qixz[klane],
-            qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane], ck,
-            dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk, fidx,
+            qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane], ddi[klane],
+						ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk, ddk, fidx,
             fidy, fidz, fipx, fipy, fipz, fkdx, fkdy, fkdz, fkpx, fkpy, fkpz);
       } // end if (include)
 
@@ -210,6 +214,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qizz[threadIdx.x] = rpole[i][mpl_pme_zz];
       pdi[threadIdx.x] = pdamp[i];
       pti[threadIdx.x] = thole[i];
+      ddi[threadIdx.x] = dirdamp[i];
       ck = rpole[k][mpl_pme_0];
       dkx = rpole[k][mpl_pme_x];
       dky = rpole[k][mpl_pme_y];
@@ -222,6 +227,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qkzz = rpole[k][mpl_pme_zz];
       pdk = pdamp[k];
       ptk = thole[k];
+      ddk = dirdamp[k];
 
 
       unsigned int dpinfo0 = dpinfo[iw * WARP_SIZE + ilane];
@@ -241,8 +247,8 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
             pair_dfield_v2<ETYP>(
                r2, xr, yr, zr, scalea, scaleb, aewald, ci[klane], dix[klane],
                diy[klane], diz[klane], qixx[klane], qixy[klane], qixz[klane],
-               qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane],
-               ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk,
+               qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane], ddi[klane],
+               ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk, ddk,
                fidx, fidy, fidz, fipx, fipy, fipz, fkdx, fkdy, fkdz, fkpx, fkpy,
                fkpz);
          } // end if (include)
@@ -316,6 +322,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qizz[threadIdx.x] = rpole[i][mpl_pme_zz];
       pdi[threadIdx.x] = pdamp[i];
       pti[threadIdx.x] = thole[i];
+      ddi[threadIdx.x] = dirdamp[i];
       ck = rpole[k][mpl_pme_0];
       dkx = rpole[k][mpl_pme_x];
       dky = rpole[k][mpl_pme_y];
@@ -328,6 +335,7 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
       qkzz = rpole[k][mpl_pme_zz];
       pdk = pdamp[k];
       ptk = thole[k];
+      ddk = dirdamp[k];
 
 
       for (int j = 0; j < WARP_SIZE; ++j) {
@@ -344,8 +352,8 @@ void dfield_cu1(int n, TINKER_IMAGE_PARAMS, real off,
             pair_dfield_v2<ETYP>(
                r2, xr, yr, zr, scalea, scaleb, aewald, ci[klane], dix[klane],
                diy[klane], diz[klane], qixx[klane], qixy[klane], qixz[klane],
-               qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane],
-               ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk,
+               qiyy[klane], qiyz[klane], qizz[klane], pdi[klane], pti[klane], ddi[klane],
+               ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, pdk, ptk, ddk,
                fidx, fidy, fidz, fipx, fipy, fipz, fkdx, fkdy, fkdz, fkpx, fkpy,
                fkpz);
          } // end if (include)
@@ -396,7 +404,7 @@ void dfield_ewald_real_cu(real (*field)[3], real (*fieldp)[3])
    launch_k1s(g::s0, nparallel, dfield_cu1<EWALD>, //
               st.n, TINKER_IMAGE_ARGS, off, st.si3.bit0, ndpexclude, dpexclude,
               dpexclude_scale, st.x, st.y, st.z, st.sorted, st.nakpl, st.iakpl,
-              st.niak, st.iak, st.lst, field, fieldp, rpole, thole, pdamp,
+              st.niak, st.iak, st.lst, field, fieldp, rpole, thole, dirdamp, pdamp,
               aewald);
 }
 
@@ -415,7 +423,7 @@ void dfield_nonewald_cu(real (*field)[3], real (*fieldp)[3])
    launch_k1s(g::s0, nparallel, dfield_cu1<NON_EWALD>, //
               st.n, TINKER_IMAGE_ARGS, off, st.si3.bit0, ndpexclude, dpexclude,
               dpexclude_scale, st.x, st.y, st.z, st.sorted, st.nakpl, st.iakpl,
-              st.niak, st.iak, st.lst, field, fieldp, rpole, thole, pdamp, 0);
+              st.niak, st.iak, st.lst, field, fieldp, rpole, thole, dirdamp, pdamp, 0);
 }
 
 

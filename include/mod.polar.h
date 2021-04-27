@@ -6,6 +6,7 @@
 namespace tinker {
 TINKER_EXTERN real* polarity;
 TINKER_EXTERN real* thole;
+TINKER_EXTERN real* dirdamp;
 TINKER_EXTERN real* pdamp;
 
 

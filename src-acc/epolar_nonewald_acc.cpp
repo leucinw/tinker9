@@ -10,7 +10,7 @@
 
 namespace tinker {
 #define POLAR_DPTRS                                                            \
-   x, y, z, depx, depy, depz, rpole, thole, pdamp, uind, uinp, nep, ep,        \
+   x, y, z, depx, depy, depz, rpole, thole, dirdamp, pdamp, uind, uinp, nep, ep,        \
       vir_ep, ufld, dufld
 template <class Ver>
 void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])

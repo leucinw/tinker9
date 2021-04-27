@@ -9,7 +9,7 @@
 
 namespace tinker {
 // see also subroutine dfield0b in induce.f
-#define DFIELD_DPTRS x, y, z, thole, pdamp, field, fieldp, rpole
+#define DFIELD_DPTRS x, y, z, thole, dirdamp, pdamp, field, fieldp, rpole
 void dfield_nonewald_acc(real (*field)[3], real (*fieldp)[3])
 {
    darray::zero(g::q0, n, field, fieldp);
@@ -40,6 +40,7 @@ void dfield_nonewald_acc(real (*field)[3], real (*fieldp)[3])
       real qizz = rpole[i][mpl_pme_zz];
       real pdi = pdamp[i];
       real pti = thole[i];
+			real ddi = dirdamp[i];
       real gxi = 0, gyi = 0, gzi = 0;
       real txi = 0, tyi = 0, tzi = 0;
 
@@ -61,11 +62,11 @@ void dfield_nonewald_acc(real (*field)[3], real (*fieldp)[3])
             pair_dfield<NON_EWALD>(  //
                r2, xr, yr, zr, 1, 1, //
                ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, pdi,
-               pti, //
+               pti, ddi, //
                rpole[k][mpl_pme_0], rpole[k][mpl_pme_x], rpole[k][mpl_pme_y],
                rpole[k][mpl_pme_z], rpole[k][mpl_pme_xx], rpole[k][mpl_pme_xy],
                rpole[k][mpl_pme_xz], rpole[k][mpl_pme_yy], rpole[k][mpl_pme_yz],
-               rpole[k][mpl_pme_zz], pdamp[k], thole[k], //
+               rpole[k][mpl_pme_zz], pdamp[k], thole[k], dirdamp[k], //
                0, fid, fip, fkd, fkp);
 
             gxi += fid.x;
@@ -117,6 +118,7 @@ void dfield_nonewald_acc(real (*field)[3], real (*fieldp)[3])
       real qizz = rpole[i][mpl_pme_zz];
       real pdi = pdamp[i];
       real pti = thole[i];
+      real ddi = dirdamp[i];
 
       real xr = x[k] - xi;
       real yr = y[k] - yi;
@@ -128,13 +130,13 @@ void dfield_nonewald_acc(real (*field)[3], real (*fieldp)[3])
          real3 fip = make_real3(0, 0, 0);
          real3 fkd = make_real3(0, 0, 0);
          real3 fkp = make_real3(0, 0, 0);
-         pair_dfield<NON_EWALD>(                                             //
-            r2, xr, yr, zr, dscale, pscale,                                  //
-            ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, pdi, pti, //
+         pair_dfield<NON_EWALD>(                                             			//
+            r2, xr, yr, zr, dscale, pscale,                                  			//
+            ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, pdi, pti, ddi, //
             rpole[k][mpl_pme_0], rpole[k][mpl_pme_x], rpole[k][mpl_pme_y],
             rpole[k][mpl_pme_z], rpole[k][mpl_pme_xx], rpole[k][mpl_pme_xy],
             rpole[k][mpl_pme_xz], rpole[k][mpl_pme_yy], rpole[k][mpl_pme_yz],
-            rpole[k][mpl_pme_zz], pdamp[k], thole[k], //
+            rpole[k][mpl_pme_zz], pdamp[k], thole[k], dirdamp[k], //
             0, fid, fip, fkd, fkp);
 
          atomic_add(fid.x, &field[i][0]);

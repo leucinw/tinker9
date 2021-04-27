@@ -39,7 +39,7 @@ void epolar_data(rc_op op)
       ndpuexclude = 0;
       darray::deallocate(dpuexclude, dpuexclude_scale);
 
-      darray::deallocate(polarity, thole, pdamp, polarity_inv);
+      darray::deallocate(polarity, thole, dirdamp, pdamp, polarity_inv);
 
       if (rc_a) {
          buffer_deallocate(rc_flag, nep);
@@ -388,7 +388,7 @@ void epolar_data(rc_op op)
       darray::copyin(g::q0, ndpexclude, dpexclude_scale, excls.data());
       wait_for(g::q0);
 
-      darray::allocate(n, &polarity, &thole, &pdamp, &polarity_inv);
+      darray::allocate(n, &polarity, &thole, &dirdamp, &pdamp, &polarity_inv);
 
       nep = nullptr;
       ep = eng_buf_elec;
@@ -485,6 +485,7 @@ void epolar_data(rc_op op)
       }
       darray::copyin(g::q0, n, polarity, polar::polarity);
       darray::copyin(g::q0, n, thole, polar::thole);
+      darray::copyin(g::q0, n, dirdamp, polar::dirdamp);
       darray::copyin(g::q0, n, pdamp, polar::pdamp);
       darray::copyin(g::q0, n, polarity_inv, pinvbuf.data());
       wait_for(g::q0);

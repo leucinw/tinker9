@@ -12,10 +12,10 @@ void pair_dfield(real r2, real xr, real yr, real zr, real dscale,
                  real pscale, //
                  real ci, real dix, real diy, real diz, real qixx, real qixy,
                  real qixz, real qiyy, real qiyz, real qizz, real pdi,
-                 real pti, //
+                 real pti, real ddi, //
                  real ck, real dkx, real dky, real dkz, real qkxx, real qkxy,
                  real qkxz, real qkyy, real qkyz, real qkzz, real pdk,
-                 real ptk, //
+                 real ptk, real ddk, //
                  real aewald, real3& restrict fid, real3& restrict fip,
                  real3& restrict fkd, real3& restrict fkp)
 {
@@ -24,7 +24,12 @@ void pair_dfield(real r2, real xr, real yr, real zr, real dscale,
    real rr2 = invr1 * invr1;
 
    real scale3, scale5, scale7;
-   damp_thole3(r, pdi, pti, pdk, ptk, scale3, scale5, scale7);
+
+	 if (ddi*ddk > 0) {
+	    damp_aplus3(r, pdi, ddi, pdk, ddk, scale3, scale5, scale7);
+	 } else {
+   		damp_thole3(r, pdi, pti, pdk, ptk, scale3, scale5, scale7);
+	 }
 
    real bn[4];
    if CONSTEXPR (eq<ETYP, EWALD>())
@@ -104,10 +109,10 @@ void pair_dfield_v2(real r2, real xr, real yr, real zr, real dscale,
                     real pscale, real aewald, //
                     real ci, real dix, real diy, real diz, real qixx, real qixy,
                     real qixz, real qiyy, real qiyz, real qizz, real pdi,
-                    real pti, //
+                    real pti, real ddi, //
                     real ck, real dkx, real dky, real dkz, real qkxx, real qkxy,
                     real qkxz, real qkyy, real qkyz, real qkzz, real pdk,
-                    real ptk, //
+                    real ptk, real ddk, //
                     real& restrict fidx, real& restrict fidy,
                     real& restrict fidz, real& restrict fipx,
                     real& restrict fipy, real& restrict fipz,
@@ -120,7 +125,11 @@ void pair_dfield_v2(real r2, real xr, real yr, real zr, real dscale,
    real rr2 = invr1 * invr1;
 
    real scale3, scale5, scale7;
-   damp_thole3(r, pdi, pti, pdk, ptk, scale3, scale5, scale7);
+	 if (ddi*ddk > 0) {
+	    damp_aplus3(r, pdi, ddi, pdk, ddk, scale3, scale5, scale7);
+	 } else {
+      damp_thole3(r, pdi, pti, pdk, ptk, scale3, scale5, scale7);
+	 }
 
    real bn[4];
    if CONSTEXPR (eq<ETYP, EWALD>())

@@ -35,6 +35,24 @@ inline void damp_thole3(real r, real pdi, real pti, real pdk, real ptk,
    scale7 = 1 - expdamp * (1 - damp + (real)0.6 * damp * damp);
 }
 
+// dfield aplus
+SEQ_ROUTINE
+inline void damp_aplus3(real r, real pdi, real ddi, real pdk, real ddk,
+                        real& restrict scale3, real& restrict scale5,
+                        real& restrict scale7)
+{
+   real pgamma = REAL_MIN(ddi, ddk);
+   real damp = pdi * pdk;
+   real ratio = r * REAL_RECIP(damp);
+   damp = (damp == 0 ? 0 : pgamma * REAL_SQRT(ratio * ratio * ratio));
+	 real damp2 = damp * damp;
+   real expdamp = REAL_EXP(damp);
+   scale3 = 1 - expdamp;
+   scale5 = 1 - expdamp * (1 + (real)0.5 * damp);
+   scale7 = 1 - expdamp * (1 + (real)0.65 * damp + (real)0.15 * damp2);
+}
+
+
 
 SEQ_ROUTINE
 inline void damp_thole3g(real r, real rr2, real xr, real yr, real zr, real pdi,
