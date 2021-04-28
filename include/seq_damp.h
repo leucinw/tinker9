@@ -105,7 +105,7 @@ inline void damp_aplus3g(real r, real rr2, real xr, real yr, real zr, real pdi,
    scale71 = scale31 * (1 + (real)0.65 * damp + (real)0.15 * damp2);
    real temp3 = (real)1.5 * damp * scale31 * rr2;
    real temp5 = (real)0.5 * (1 + damp);
-   real temp7 = (real)0.7 + (real)0.5*damp2 / temp5;
+   real temp7 = (real)0.7 + (real)0.15*damp2 / temp5;
    rc31 = xr * temp3;
    rc32 = yr * temp3;
    rc33 = zr * temp3;
