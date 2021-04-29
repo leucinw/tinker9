@@ -17,19 +17,19 @@ void induce(real (*uind)[3], real (*uinp)[3]);
 
 
 void epolar(int vers);
-void epolar_nonewald(int vers);
-void epolar_ewald(int vers);
-void epolar_ewald_real(int vers);
-void epolar_ewald_recip_self(int vers);
+void epolar_nonewald(int vers, int use_cf);
+void epolar_ewald(int vers, int use_cf);
+void epolar_ewald_real(int vers, int use_cf);
+void epolar_ewald_recip_self(int vers, int use_cf);
 // see also subroutine epolar0e in epolar.f
 void epolar0_dotprod(const real (*uind)[3], const real (*udirp)[3]);
 
 
-void epolar_nonewald_acc(int vers, const real (*d)[3], const real (*p)[3]);
-void epolar_ewald_real_acc(int vers, const real (*d)[3], const real (*p)[3]);
-void epolar_ewald_recip_self_acc(int vers, const real (*d)[3],
+void epolar_nonewald_acc(int vers, int use_cf, const real (*d)[3], const real (*p)[3]);
+void epolar_ewald_real_acc(int vers, int use_cf, const real (*d)[3], const real (*p)[3]);
+void epolar_ewald_recip_self_acc(int vers, int use_cf, const real (*d)[3],
                                  const real (*p)[3]);
 void epolar0_dotprod_acc(const real (*uind)[3], const real (*udirp)[3]);
-void epolar_nonewald_cu(int vers, const real (*d)[3], const real (*p)[3]);
-void epolar_ewald_real_cu(int vers, const real (*d)[3], const real (*p)[3]);
+void epolar_nonewald_cu(int vers, int use_cf, const real (*d)[3], const real (*p)[3]);
+void epolar_ewald_real_cu(int vers, int use_cf, const real (*d)[3], const real (*p)[3]);
 }

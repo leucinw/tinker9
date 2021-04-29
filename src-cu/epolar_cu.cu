@@ -1,4 +1,5 @@
 #include "add.h"
+#include "cflux.h"
 #include "epolar.h"
 #include "epolar_trq.h"
 #include "glob.mplar.h"
@@ -15,7 +16,7 @@
 
 namespace tinker {
 // ck.py Version 2.0.2
-template <class Ver, class ETYP>
+template <class Ver, class ETYP, bool CFLX>
 __global__
 void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                 energy_buffer restrict ep, virial_buffer restrict vep,
@@ -31,7 +32,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                 real (*restrict dufld)[6], const real (*restrict rpole)[10],
                 const real (*restrict uind)[3], const real (*restrict uinp)[3],
                 const real* restrict thole, const real* restrict dirdamp, 
-								const real* restrict pdamp, real f, real aewald)
+								const real* restrict pdamp, real f, real* restrict pot, real aewald)
 {
    constexpr bool do_e = Ver::e;
    constexpr bool do_a = Ver::a;
@@ -80,6 +81,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
    __shared__ real dufld3i[BLOCK_DIM];
    __shared__ real dufld4i[BLOCK_DIM];
    __shared__ real dufld5i[BLOCK_DIM];
+   __shared__ real poti[BLOCK_DIM];
    real frcxk;
    real frcyk;
    real frczk;
@@ -148,6 +150,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3i[threadIdx.x] = 0;
          dufld4i[threadIdx.x] = 0;
          dufld5i[threadIdx.x] = 0;
+         if CONSTEXPR (CFLX)
+            poti[threadIdx.x] = 0;
          frcxk = 0;
          frcyk = 0;
          frczk = 0;
@@ -160,6 +164,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3k = 0;
          dufld4k = 0;
          dufld5k = 0;
+         if CONSTEXPR (CFLX)
+            potk = 0;
       }
 
 
@@ -220,11 +226,12 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
       real xr = xk - xi[klane];
       real yr = yk - yi[klane];
       real zr = zk - zi[klane];
+			real pota, potb;
       real r2 = image2(xr, yr, zr);
       if (r2 <= off * off and incl) {
          real e, vxx, vyx, vzx, vyy, vzy, vzz;
          real e1, vxx1, vyx1, vzx1, vyy1, vzy1, vzz1;
-         pair_polar_v2<Ver, ETYP>(
+         pair_polar_v2<Ver, ETYP, CFLX>(
             r2, xr, yr, zr, 1, 1, 1, //
             ci[klane], dix[klane], diy[klane], diz[klane], qixx[klane],
             qixy[klane], qixz[klane], qiyy[klane], qiyz[klane], qizz[klane],
@@ -232,7 +239,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
             uipz[klane], pdi[klane], pti[klane], ddi[klane], //
             ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukdx, ukdy,
             ukdz, ukpx, ukpy, ukpz, pdk, ptk, ddk, //
-            f, aewald,                        //
+            f, pota, potb, aewald,                        //
             frcxi[klane], frcyi[klane], frczi[klane], frcxk, frcyk, frczk,
             ufld0i[klane], ufld1i[klane], ufld2i[klane], ufld0k, ufld1k,
             ufld2k, //
@@ -240,7 +247,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
             dufld4i[klane], dufld5i[klane], dufld0k, dufld1k, dufld2k, dufld3k,
             dufld4k, dufld5k, //
             e1, vxx1, vyx1, vzx1, vyy1, vzy1, vzz1);
-         pair_polar_v2<Ver, NON_EWALD>(
+         pair_polar_v2<Ver, NON_EWALD, CFLX>(
             r2, xr, yr, zr, scaleb - 1, scalec - 1, scaled - 1, //
             ci[klane], dix[klane], diy[klane], diz[klane], qixx[klane],
             qixy[klane], qixz[klane], qiyy[klane], qiyz[klane], qizz[klane],
@@ -248,7 +255,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
             uipz[klane], pdi[klane], pti[klane], ddi[klane], //
             ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukdx, ukdy,
             ukdz, ukpx, ukpy, ukpz, pdk, ptk, ddk, //
-            f, aewald,                        //
+            f, pota, potb, aewald,                 //
             frcxi[klane], frcyi[klane], frczi[klane], frcxk, frcyk, frczk,
             ufld0i[klane], ufld1i[klane], ufld2i[klane], ufld0k, ufld1k,
             ufld2k, //
@@ -272,6 +279,10 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
             veptlzy += cvt_to<vbuf_prec>(vzy + vzy1);
             veptlzz += cvt_to<vbuf_prec>(vzz + vzz1);
          }
+         if CONSTEXPR (CFLX) {
+            poti[klane] += pota;
+            potk += potb;
+         }
       } // end if (include)
 
 
@@ -288,6 +299,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3i[threadIdx.x], &dufld[i][3]);
          atomic_add(dufld4i[threadIdx.x], &dufld[i][4]);
          atomic_add(dufld5i[threadIdx.x], &dufld[i][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(poti[threadIdx.x], pot, i);
          atomic_add(frcxk, gx, k);
          atomic_add(frcyk, gy, k);
          atomic_add(frczk, gz, k);
@@ -300,6 +313,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3k, &dufld[k][3]);
          atomic_add(dufld4k, &dufld[k][4]);
          atomic_add(dufld5k, &dufld[k][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(potk, pot, k);
       }
    }
    // */
@@ -319,6 +334,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3i[threadIdx.x] = 0;
          dufld4i[threadIdx.x] = 0;
          dufld5i[threadIdx.x] = 0;
+         if CONSTEXPR (CFLX)
+            poti[threadIdx.x] = 0;
          frcxk = 0;
          frcyk = 0;
          frczk = 0;
@@ -331,6 +348,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3k = 0;
          dufld4k = 0;
          dufld5k = 0;
+         if CONSTEXPR (CFLX)
+            potk = 0;
       }
 
 
@@ -404,9 +423,10 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          real yr = yk - yi[klane];
          real zr = zk - zi[klane];
          real r2 = image2(xr, yr, zr);
+				 real pota, potb;
          if (r2 <= off * off and incl) {
             real e, vxx, vyx, vzx, vyy, vzy, vzz;
-            pair_polar_v2<Ver, ETYP>(
+            pair_polar_v2<Ver, ETYP, CFLX>(
                r2, xr, yr, zr, 1, 1, 1, //
                ci[klane], dix[klane], diy[klane], diz[klane], qixx[klane],
                qixy[klane], qixz[klane], qiyy[klane], qiyz[klane], qizz[klane],
@@ -414,7 +434,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                uipz[klane], pdi[klane], pti[klane], ddi[klane], //
                ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukdx,
                ukdy, ukdz, ukpx, ukpy, ukpz, pdk, ptk, ddk, //
-               f, aewald,                              //
+               f, pota, potb, aewald,                              //
                frcxi[klane], frcyi[klane], frczi[klane], frcxk, frcyk, frczk,
                ufld0i[klane], ufld1i[klane], ufld2i[klane], ufld0k, ufld1k,
                ufld2k, //
@@ -437,6 +457,10 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                veptlzy += cvt_to<vbuf_prec>(vzy);
                veptlzz += cvt_to<vbuf_prec>(vzz);
             }
+            if CONSTEXPR (CFLX) {
+               poti[klane] += pota;
+               potk += potb;
+            }
          } // end if (include)
 
 
@@ -457,6 +481,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3i[threadIdx.x], &dufld[i][3]);
          atomic_add(dufld4i[threadIdx.x], &dufld[i][4]);
          atomic_add(dufld5i[threadIdx.x], &dufld[i][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(poti[threadIdx.x], pot, i);
          atomic_add(frcxk, gx, k);
          atomic_add(frcyk, gy, k);
          atomic_add(frczk, gz, k);
@@ -469,6 +495,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3k, &dufld[k][3]);
          atomic_add(dufld4k, &dufld[k][4]);
          atomic_add(dufld5k, &dufld[k][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(potk, pot, k);
       }
    }
 
@@ -487,6 +515,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3i[threadIdx.x] = 0;
          dufld4i[threadIdx.x] = 0;
          dufld5i[threadIdx.x] = 0;
+         if CONSTEXPR (CFLX)
+            poti[threadIdx.x] = 0;
          frcxk = 0;
          frcyk = 0;
          frczk = 0;
@@ -499,6 +529,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          dufld3k = 0;
          dufld4k = 0;
          dufld5k = 0;
+         if CONSTEXPR (CFLX)
+            potk = 0;
       }
 
 
@@ -562,6 +594,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          real xr = xk - xi[klane];
          real yr = yk - yi[klane];
          real zr = zk - zi[klane];
+				 real pota, potb;
          real r2 = image2(xr, yr, zr);
          if (r2 <= off * off and incl) {
             real e, vxx, vyx, vzx, vyy, vzy, vzz;
@@ -573,7 +606,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                uipz[klane], pdi[klane], pti[klane], ddi[klane], //
                ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukdx,
                ukdy, ukdz, ukpx, ukpy, ukpz, pdk, ptk, ddk, //
-               f, aewald,                              //
+               f, pota, potb, aewald,                              //
                frcxi[klane], frcyi[klane], frczi[klane], frcxk, frcyk, frczk,
                ufld0i[klane], ufld1i[klane], ufld2i[klane], ufld0k, ufld1k,
                ufld2k, //
@@ -596,6 +629,10 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
                veptlzy += cvt_to<vbuf_prec>(vzy);
                veptlzz += cvt_to<vbuf_prec>(vzz);
             }
+            if CONSTEXPR (CFLX) {
+               poti[klane] += pota;
+               potk += potb;
+            }
          } // end if (include)
       }
 
@@ -613,6 +650,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3i[threadIdx.x], &dufld[i][3]);
          atomic_add(dufld4i[threadIdx.x], &dufld[i][4]);
          atomic_add(dufld5i[threadIdx.x], &dufld[i][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(poti[threadIdx.x], pot, i);
          atomic_add(frcxk, gx, k);
          atomic_add(frcyk, gy, k);
          atomic_add(frczk, gz, k);
@@ -625,6 +664,8 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
          atomic_add(dufld3k, &dufld[k][3]);
          atomic_add(dufld4k, &dufld[k][4]);
          atomic_add(dufld5k, &dufld[k][5]);
+         if CONSTEXPR (CFLX)
+            atomic_add(potk, pot, k);
       }
    }
 
@@ -642,7 +683,7 @@ void epolar_cu1(int n, TINKER_IMAGE_PARAMS, count_buffer restrict nep,
 }
 
 
-template <class Ver, class ETYP>
+template <class Ver, class ETYP, int CFLX>
 void epolar_cu(const real (*uind)[3], const real (*uinp)[3])
 {
    constexpr bool do_g = Ver::g;
@@ -668,11 +709,11 @@ void epolar_cu(const real (*uind)[3], const real (*uinp)[3])
       darray::zero(g::q0, n, ufld, dufld);
    }
    int ngrid = get_grid_size(BLOCK_DIM);
-   epolar_cu1<Ver, ETYP><<<ngrid, BLOCK_DIM, 0, g::s0>>>(
+   epolar_cu1<Ver, ETYP, CFLX><<<ngrid, BLOCK_DIM, 0, g::s0>>>(
       st.n, TINKER_IMAGE_ARGS, nep, ep, vir_ep, depx, depy, depz, off,
       st.si1.bit0, nmdpuexclude, mdpuexclude, mdpuexclude_scale, st.x, st.y,
       st.z, st.sorted, st.nakpl, st.iakpl, st.niak, st.iak, st.lst, ufld, dufld,
-      rpole, uind, uinp, thole, dirdamp, pdamp, f, aewald);
+      rpole, uind, uinp, thole, dirdamp, pdamp, f, pot, aewald);
 
 
    // torque
@@ -683,39 +724,75 @@ void epolar_cu(const real (*uind)[3], const real (*uinp)[3])
 }
 
 
-void epolar_nonewald_cu(int vers, const real (*uind)[3], const real (*uinp)[3])
+void epolar_nonewald_cu(int vers, int use_cf, const real (*uind)[3], const real (*uinp)[3])
 {
-   if (vers == calc::v0) {
-      epolar_cu<calc::V0, NON_EWALD>(uind, uinp);
-   } else if (vers == calc::v1) {
-      epolar_cu<calc::V1, NON_EWALD>(uind, uinp);
-   } else if (vers == calc::v3) {
-      epolar_cu<calc::V3, NON_EWALD>(uind, uinp);
-   } else if (vers == calc::v4) {
-      epolar_cu<calc::V4, NON_EWALD>(uind, uinp);
-   } else if (vers == calc::v5) {
-      epolar_cu<calc::V5, NON_EWALD>(uind, uinp);
-   } else if (vers == calc::v6) {
-      epolar_cu<calc::V6, NON_EWALD>(uind, uinp);
-   }
+	 if (use_cf) {
+   		if (vers == calc::v0) {
+   		   //epolar_cu<calc::V0, NON_EWALD, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+   		} else if (vers == calc::v1) {
+   		   epolar_cu<calc::V1, NON_EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v3) {
+   		   //epolar_cu<calc::V3, NON_EWALD, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+   		} else if (vers == calc::v4) {
+   		   epolar_cu<calc::V4, NON_EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v5) {
+   		   epolar_cu<calc::V5, NON_EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v6) {
+   		   epolar_cu<calc::V6, NON_EWALD, 1>(uind, uinp);
+   		}
+	 } else {
+   		if (vers == calc::v0) {
+   		   epolar_cu<calc::V0, NON_EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v1) {
+   		   epolar_cu<calc::V1, NON_EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v3) {
+   		   epolar_cu<calc::V3, NON_EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v4) {
+   		   epolar_cu<calc::V4, NON_EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v5) {
+   		   epolar_cu<calc::V5, NON_EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v6) {
+   		   epolar_cu<calc::V6, NON_EWALD, 0>(uind, uinp);
+   		}
+	 }
 }
 
 
-void epolar_ewald_real_cu(int vers, const real (*uind)[3],
+void epolar_ewald_real_cu(int vers, int use_cf, const real (*uind)[3],
                           const real (*uinp)[3])
 {
-   if (vers == calc::v0) {
-      epolar_cu<calc::V0, EWALD>(uind, udirp);
-   } else if (vers == calc::v1) {
-      epolar_cu<calc::V1, EWALD>(uind, uinp);
-   } else if (vers == calc::v3) {
-      epolar_cu<calc::V3, EWALD>(uind, uinp);
-   } else if (vers == calc::v4) {
-      epolar_cu<calc::V4, EWALD>(uind, uinp);
-   } else if (vers == calc::v5) {
-      epolar_cu<calc::V5, EWALD>(uind, uinp);
-   } else if (vers == calc::v6) {
-      epolar_cu<calc::V6, EWALD>(uind, uinp);
-   }
+	 if (use_cf) {
+   		if (vers == calc::v0) {
+   		   //epolar_cu<calc::V0, EWALD, 1>(uind, udirp);
+         assert(false && "CFLX must compute gradient.");
+   		} else if (vers == calc::v1) {
+   		   epolar_cu<calc::V1, EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v3) {
+   		   //epolar_cu<calc::V3, EWALD, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+   		} else if (vers == calc::v4) {
+   		   epolar_cu<calc::V4, EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v5) {
+   		   epolar_cu<calc::V5, EWALD, 1>(uind, uinp);
+   		} else if (vers == calc::v6) {
+   		   epolar_cu<calc::V6, EWALD, 1>(uind, uinp);
+   		}
+	 } else {
+   		if (vers == calc::v0) {
+   		   epolar_cu<calc::V0, EWALD, 0>(uind, udirp);
+   		} else if (vers == calc::v1) {
+   		   epolar_cu<calc::V1, EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v3) {
+   		   epolar_cu<calc::V3, EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v4) {
+   		   epolar_cu<calc::V4, EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v5) {
+   		   epolar_cu<calc::V5, EWALD, 0>(uind, uinp);
+   		} else if (vers == calc::v6) {
+   		   epolar_cu<calc::V6, EWALD, 0>(uind, uinp);
+   		}
+	 }
 }
 }

@@ -13,7 +13,7 @@ namespace tinker {
 #define POLAR_DPTRS                                                            \
    x, y, z, depx, depy, depz, rpole, thole, dirdamp, pdamp, uind, uinp, nep, ep,        \
       vir_ep, ufld, dufld
-template <class Ver>
+template <class Ver, bool CFLX>
 void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
 {
    constexpr bool do_e = Ver::e;
@@ -63,6 +63,7 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
       real pti = thole[i];
       real ddi = dirdamp[i];
       real uixp = 0, uiyp = 0, uizp = 0;
+      MAYBE_UNUSED real poti = 0;
       if CONSTEXPR (do_g) {
          uixp = uinp[i][0];
          uiyp = uinp[i][1];
@@ -106,13 +107,14 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
             }
 
             MAYBE_UNUSED real e;
-            pair_polar<do_e, do_g, EWALD>( //
+            MAYBE_UNUSED real pota, potb;
+            pair_polar<do_e, do_g, EWALD, CFLX>( //
                r2, xr, yr, zr, 1, 1, 1,    //
                ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
                uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
                ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
                ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
-               f, aewald, e, pgrad);
+               f, aewald, e, pota, potb, pgrad);
 
             if CONSTEXPR (do_a)
                atomic_add(1, nep, offset);
@@ -157,6 +159,11 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
 
                   atomic_add(vxx, vxy, vxz, vyy, vyz, vzz, vir_ep, offset);
                }
+               // Charge flux term
+               if CONSTEXPR (CFLX) {
+                  poti += pota;
+                  atomic_add(potb, pot, k);
+               } // end CFLX
             }
          }
          // end if use_thole
@@ -176,6 +183,9 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
          atomic_add(du3, &dufld[i][3]);
          atomic_add(du4, &dufld[i][4]);
          atomic_add(du5, &dufld[i][5]);
+         if CONSTEXPR (CFLX) {
+            atomic_add(poti, pot, i);
+         }
       }
    } // end for (int i)
 
@@ -245,13 +255,14 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
          }
 
          MAYBE_UNUSED real e;
-         pair_polar<do_e, do_g, NON_EWALD>(         //
+         MAYBE_UNUSED real pota, potb;
+         pair_polar<do_e, do_g, NON_EWALD, CFLX>(         //
             r2, xr, yr, zr, dscale, pscale, uscale, //
             ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
             uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
             ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
             ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
-            f, 0, e, pgrad);
+            f, 0, e, pota, potb, pgrad);
 
          if CONSTEXPR (do_a)
             if (pscale == -1)
@@ -297,6 +308,10 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
 
                atomic_add(vxx, vxy, vxz, vyy, vyz, vzz, vir_ep, offset);
             }
+            if CONSTEXPR (CFLX) {
+               atomic_add(pota, pot, i);
+               atomic_add(potb, pot, k);
+            } // end if CFLX
          }
       }
    }
@@ -334,7 +349,7 @@ void epolar_ewald_real_acc1(const real (*uind)[3], const real (*uinp)[3])
    }
 }
 
-template <class Ver>
+template <class Ver, int CFLX>
 void epolar_ewald_recip_self_acc1(const real (*gpu_uind)[3],
                                   const real (*gpu_uinp)[3])
 {
@@ -475,6 +490,9 @@ void epolar_ewald_recip_self_acc1(const real (*gpu_uind)[3],
          trqx[i] += tep1;
          trqy[i] += tep2;
          trqz[i] += tep3;
+
+         if CONSTEXPR (CFLX)
+            atomic_add(cphidp[i][0], pot, i);
       }
 
       if CONSTEXPR (do_e) {
@@ -681,39 +699,76 @@ void epolar_ewald_recip_self_acc1(const real (*gpu_uind)[3],
 }
 
 
-void epolar_ewald_real_acc(int vers, const real (*uind)[3],
+void epolar_ewald_real_acc(int vers, int use_cf, const real (*uind)[3],
                            const real (*uinp)[3])
 {
-   if (vers == calc::v0) {
-      epolar_ewald_real_acc1<calc::V0>(uind, uinp);
-   } else if (vers == calc::v1) {
-      epolar_ewald_real_acc1<calc::V1>(uind, uinp);
-   } else if (vers == calc::v3) {
-      epolar_ewald_real_acc1<calc::V3>(uind, uinp);
-   } else if (vers == calc::v4) {
-      epolar_ewald_real_acc1<calc::V4>(uind, uinp);
-   } else if (vers == calc::v5) {
-      epolar_ewald_real_acc1<calc::V5>(uind, uinp);
-   } else if (vers == calc::v6) {
-      epolar_ewald_real_acc1<calc::V6>(uind, uinp);
-   }
+	 if (use_cf) {
+      if (vers == calc::v0) {
+         //epolar_ewald_real_acc1<calc::V0, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+      } else if (vers == calc::v1) {
+         epolar_ewald_real_acc1<calc::V1, 1>(uind, uinp);
+      } else if (vers == calc::v3) {
+         //epolar_ewald_real_acc1<calc::V3, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+      } else if (vers == calc::v4) {
+         epolar_ewald_real_acc1<calc::V4, 1>(uind, uinp);
+      } else if (vers == calc::v5) {
+         epolar_ewald_real_acc1<calc::V5, 1>(uind, uinp);
+      } else if (vers == calc::v6) {
+         epolar_ewald_real_acc1<calc::V6, 1>(uind, uinp);
+      }
+	 } else {
+      if (vers == calc::v0) {
+         epolar_ewald_real_acc1<calc::V0, 0>(uind, uinp);
+      } else if (vers == calc::v1) {
+         epolar_ewald_real_acc1<calc::V1, 0>(uind, uinp);
+      } else if (vers == calc::v3) {
+         epolar_ewald_real_acc1<calc::V3, 0>(uind, uinp);
+      } else if (vers == calc::v4) {
+         epolar_ewald_real_acc1<calc::V4, 0>(uind, uinp);
+      } else if (vers == calc::v5) {
+         epolar_ewald_real_acc1<calc::V5, 0>(uind, uinp);
+      } else if (vers == calc::v6) {
+         epolar_ewald_real_acc1<calc::V6, 0>(uind, uinp);
+      }
+	 }
 }
 
-void epolar_ewald_recip_self_acc(int vers, const real (*uind)[3],
+void epolar_ewald_recip_self_acc(int vers, int use_cf, const real (*uind)[3],
                                  const real (*uinp)[3])
 {
-   if (vers == calc::v0) {
-      epolar_ewald_recip_self_acc1<calc::V0>(uind, uinp);
-   } else if (vers == calc::v1) {
-      epolar_ewald_recip_self_acc1<calc::V1>(uind, uinp);
-   } else if (vers == calc::v3) {
-      epolar_ewald_recip_self_acc1<calc::V3>(uind, uinp);
-   } else if (vers == calc::v4) {
-      epolar_ewald_recip_self_acc1<calc::V4>(uind, uinp);
-   } else if (vers == calc::v5) {
-      epolar_ewald_recip_self_acc1<calc::V5>(uind, uinp);
-   } else if (vers == calc::v6) {
-      epolar_ewald_recip_self_acc1<calc::V6>(uind, uinp);
-   }
+	 if (use_cf) {
+      if (vers == calc::v0) {
+         //epolar_ewald_recip_self_acc1<calc::V0, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+      } else if (vers == calc::v1) {
+         epolar_ewald_recip_self_acc1<calc::V1, 1>(uind, uinp);
+      } else if (vers == calc::v3) {
+         //epolar_ewald_recip_self_acc1<calc::V3, 1>(uind, uinp);
+         assert(false && "CFLX must compute gradient.");
+      } else if (vers == calc::v4) {
+         epolar_ewald_recip_self_acc1<calc::V4, 1>(uind, uinp);
+      } else if (vers == calc::v5) {
+         epolar_ewald_recip_self_acc1<calc::V5, 1>(uind, uinp);
+      } else if (vers == calc::v6) {
+         epolar_ewald_recip_self_acc1<calc::V6, 1>(uind, uinp);
+      }
+	 } else {
+      if (vers == calc::v0) {
+         epolar_ewald_recip_self_acc1<calc::V0, 0>(uind, uinp);
+      } else if (vers == calc::v1) {
+         epolar_ewald_recip_self_acc1<calc::V1, 0>(uind, uinp);
+      } else if (vers == calc::v3) {
+         epolar_ewald_recip_self_acc1<calc::V3, 0>(uind, uinp);
+      } else if (vers == calc::v4) {
+         epolar_ewald_recip_self_acc1<calc::V4, 0>(uind, uinp);
+      } else if (vers == calc::v5) {
+         epolar_ewald_recip_self_acc1<calc::V5, 0>(uind, uinp);
+      } else if (vers == calc::v6) {
+         epolar_ewald_recip_self_acc1<calc::V6, 0>(uind, uinp);
+      }
+
+	 }
 }
 }

@@ -39,17 +39,18 @@ inline void zero(PairPolarGrad& pgrad)
 
 
 #pragma acc routine seq
-template <bool do_e, bool do_g, class ETYP>
+template <bool do_e, bool do_g, class ETYP, int CFLX>
 SEQ_CUDA
-void pair_polar(                                                              //
-   real r2, real xr, real yr, real zr, real dscale, real pscale, real uscale, //
+void pair_polar(                                                             
+   real r2, real xr, real yr, real zr, real dscale, real pscale, real uscale, 
    real ci, real dix, real diy, real diz, real qixx, real qixy, real qixz,
    real qiyy, real qiyz, real qizz, real uix, real uiy, real uiz, real uixp,
-   real uiyp, real uizp, real pdi, real pti, real ddi, //
+   real uiyp, real uizp, real pdi, real pti, real ddi, 
    real ck, real dkx, real dky, real dkz, real qkxx, real qkxy, real qkxz,
    real qkyy, real qkyz, real qkzz, real ukx, real uky, real ukz, real ukxp,
-   real ukyp, real ukzp, real pdk, real ptk, real ddk, //
-   real f, real aewald, real& restrict e, PairPolarGrad& restrict pgrad)
+   real ukyp, real ukzp, real pdk, real ptk, real ddk, 
+   real f, real aewald, real& restrict e, real& restrict poti, 
+	 real& restrict potk, PairPolarGrad& restrict pgrad)
 {
    if CONSTEXPR (eq<ETYP, EWALD>()) {
       dscale = 1;
@@ -157,6 +158,10 @@ void pair_polar(                                                              //
    if CONSTEXPR (do_g) {
       real uirp = uixp * xr + uiyp * yr + uizp * zr;
       real ukrp = ukxp * xr + ukyp * yr + ukzp * zr;
+			if CONSTEXPR (CFLX) {
+         poti = -ukr*pscale*sr3 - ukrp*dscale*sr3; 
+         potk =  uir*pscale*sr3 + uirp*dscale*sr3; 
+      }
 
       // get the induced dipole field used for dipole torques
 

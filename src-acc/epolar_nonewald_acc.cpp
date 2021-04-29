@@ -12,7 +12,7 @@ namespace tinker {
 #define POLAR_DPTRS                                                            \
    x, y, z, depx, depy, depz, rpole, thole, dirdamp, pdamp, uind, uinp, nep, ep,        \
       vir_ep, ufld, dufld
-template <class Ver>
+template <class Ver, bool CFLX>
 void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
 {
    constexpr bool do_e = Ver::e;
@@ -67,11 +67,12 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
       real gxi = 0, gyi = 0, gzi = 0;
       real txi = 0, tyi = 0, tzi = 0;
       real du0 = 0, du1 = 0, du2 = 0, du3 = 0, du4 = 0, du5 = 0;
+      MAYBE_UNUSED real poti = 0;
 
       int nmlsti = mlst->nlst[i];
       int base = i * maxnlst;
       #pragma acc loop vector independent private(pgrad)\
-                  reduction(+:gxi,gyi,gzi,txi,tyi,tzi,du0,du1,du2,du3,du4,du5)
+                  reduction(+:gxi,gyi,gzi,txi,tyi,tzi,poti,du0,du1,du2,du3,du4,du5)
       for (int kk = 0; kk < nmlsti; ++kk) {
          int offset = kk & (bufsize - 1);
          int k = mlst->lst[base + kk];
@@ -81,6 +82,7 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
 
          real r2 = image2(xr, yr, zr);
          if (r2 <= off2) {
+            MAYBE_UNUSED real pota, potb;
             real ck = rpole[k][mpl_pme_0];
             real dkx = rpole[k][mpl_pme_x];
             real dky = rpole[k][mpl_pme_y];
@@ -102,13 +104,13 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
             }
 
             MAYBE_UNUSED real e;
-            pair_polar<do_e, do_g, NON_EWALD>( //
+            pair_polar<do_e, do_g, NON_EWALD, CFLX>( //
                r2, xr, yr, zr, 1, 1, 1,        //
                ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
                uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
                ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
                ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
-               f, 0, e, pgrad);
+               f, 0, e, pota, potb, pgrad);
 
             if CONSTEXPR (do_a)
                atomic_add(1, nep, offset);
@@ -152,6 +154,11 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
 
                   atomic_add(vxx, vxy, vxz, vyy, vyz, vzz, vir_ep, offset);
                }
+               // Charge flux term
+               if CONSTEXPR (CFLX) {
+                  poti += pota;
+                  atomic_add(potb, pot, k);
+               } // end CFLX
             }
          }
       } // end for (int kk)
@@ -169,6 +176,9 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
          atomic_add(du3, &dufld[i][3]);
          atomic_add(du4, &dufld[i][4]);
          atomic_add(du5, &dufld[i][5]);
+         if CONSTEXPR (CFLX) {
+            atomic_add(poti, pot, i);
+         }
       }
    } // end for (int i)
 
@@ -238,13 +248,14 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
          }
 
          MAYBE_UNUSED real e;
-         pair_polar<do_e, do_g, NON_EWALD>(         //
+         MAYBE_UNUSED real pota, potb;
+         pair_polar<do_e, do_g, NON_EWALD, CFLX>(         //
             r2, xr, yr, zr, dscale, pscale, uscale, //
             ci, dix, diy, diz, qixx, qixy, qixz, qiyy, qiyz, qizz, uix, uiy,
             uiz, uixp, uiyp, uizp, pdi, pti, ddi, //
             ck, dkx, dky, dkz, qkxx, qkxy, qkxz, qkyy, qkyz, qkzz, ukx, uky,
             ukz, ukxp, ukyp, ukzp, pdamp[k], thole[k], dirdamp[k], //
-            f, 0, e, pgrad);
+            f, 0, e, pota, potb, pgrad);
 
          if CONSTEXPR (do_a)
             if (pscale == -1)
@@ -290,6 +301,10 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
 
                atomic_add(vxx, vxy, vxz, vyy, vyz, vzz, vir_ep, offset);
             }
+            if CONSTEXPR (CFLX) {
+               atomic_add(pota, pot, i);
+               atomic_add(potb, pot, k);
+            } // end if CFLX
          }
       }
    }
@@ -327,20 +342,38 @@ void epolar_nonewald_acc1(const real (*uind)[3], const real (*uinp)[3])
    }
 }
 
-void epolar_nonewald_acc(int vers, const real (*uind)[3], const real (*uinp)[3])
+void epolar_nonewald_acc(int vers, int use_cf, const real (*uind)[3], const real (*uinp)[3])
 {
-   if (vers == calc::v0) {
-      epolar_nonewald_acc1<calc::V0>(uind, uinp);
-   } else if (vers == calc::v1) {
-      epolar_nonewald_acc1<calc::V1>(uind, uinp);
-   } else if (vers == calc::v3) {
-      epolar_nonewald_acc1<calc::V3>(uind, uinp);
-   } else if (vers == calc::v4) {
-      epolar_nonewald_acc1<calc::V4>(uind, uinp);
-   } else if (vers == calc::v5) {
-      epolar_nonewald_acc1<calc::V5>(uind, uinp);
-   } else if (vers == calc::v6) {
-      epolar_nonewald_acc1<calc::V6>(uind, uinp);
-   }
+		if (use_cf) {
+		   if (vers == calc::v0) {
+		      //epolar_nonewald_acc1<calc::V0>(uind, uinp);
+          assert(false && "CFLX must compute gradient.");
+		   } else if (vers == calc::v1) {
+		      epolar_nonewald_acc1<calc::V1, 1>(uind, uinp);
+		   } else if (vers == calc::v3) {
+		      //epolar_nonewald_acc1<calc::V3>(uind, uinp);
+          assert(false && "CFLX must compute gradient.");
+		   } else if (vers == calc::v4) {
+		      epolar_nonewald_acc1<calc::V4, 1>(uind, uinp);
+		   } else if (vers == calc::v5) {
+		      epolar_nonewald_acc1<calc::V5, 1>(uind, uinp);
+		   } else if (vers == calc::v6) {
+		      epolar_nonewald_acc1<calc::V6, 1>(uind, uinp);
+		   }
+		} else {
+		   if (vers == calc::v0) {
+		      epolar_nonewald_acc1<calc::V0, 0>(uind, uinp);
+		   } else if (vers == calc::v1) {
+		      epolar_nonewald_acc1<calc::V1, 0>(uind, uinp);
+		   } else if (vers == calc::v3) {
+		      epolar_nonewald_acc1<calc::V3, 0>(uind, uinp);
+		   } else if (vers == calc::v4) {
+		      epolar_nonewald_acc1<calc::V4, 0>(uind, uinp);
+		   } else if (vers == calc::v5) {
+		      epolar_nonewald_acc1<calc::V5, 0>(uind, uinp);
+		   } else if (vers == calc::v6) {
+		      epolar_nonewald_acc1<calc::V6, 0>(uind, uinp);
+		   }
+		}
 }
 }
